@@ -141,6 +141,8 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         startAFSKdecoder(markFrequency, spaceFrequency, specialFrequency);
 
 
+        // Naka comment ni pra dili sya mag dungan which is syncrhonous pero di man pwde
+
         //startSSTVDecoder();
 
     }
