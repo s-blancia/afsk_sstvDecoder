@@ -1019,7 +1019,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         } else if (Math.abs(frequency - spaceFrequency) <= tolerance) {
             return ' ';
         } else {
-            return ' '; // Return a space for unrecognized frequencies
+            return ' '; // Return a space for unrecognized frequenciesdawd dawdawdawd
         }
     }
 
