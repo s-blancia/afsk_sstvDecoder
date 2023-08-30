@@ -64,22 +64,10 @@ public class Decoder {
     private final Allocation rsDecoderVolume;
     private final ScriptC_decoder rsDecoder;
 
-    private final int mode_raw = 0;
+
     private final int mode_robot36 = 1;
     private final int mode_robot72 = 2;
-    private final int mode_martin1 = 3;
-    private final int mode_martin2 = 4;
-    private final int mode_scottie1 = 5;
-    private final int mode_scottie2 = 6;
-    private final int mode_scottieDX = 7;
-    private final int mode_wraaseSC2_180 = 8;
-    private final int mode_pd50 = 9;
-    private final int mode_pd90 = 10;
-    private final int mode_pd120 = 11;
-    private final int mode_pd160 = 12;
-    private final int mode_pd180 = 13;
-    private final int mode_pd240 = 14;
-    private final int mode_pd290 = 15;
+
 
     private final Thread thread = new Thread() {
         @Override
@@ -215,10 +203,7 @@ public class Decoder {
     void switch_mode(int mode)
     {
         switch (mode) {
-            case mode_raw:
-                image.setImageResolution(maxWidth, maxHeight);
-                updateTitle(R.string.action_raw_mode);
-                break;
+
             case mode_robot36:
                 image.setImageResolution(320, freeRunReserve(240));
                 updateTitle(R.string.action_robot36_mode);
@@ -227,58 +212,7 @@ public class Decoder {
                 image.setImageResolution(320, freeRunReserve(240));
                 updateTitle(R.string.action_robot72_mode);
                 break;
-            case mode_martin1:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_martin1_mode);
-                break;
-            case mode_martin2:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_martin2_mode);
-                break;
-            case mode_scottie1:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_scottie1_mode);
-                break;
-            case mode_scottie2:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_scottie2_mode);
-                break;
-            case mode_scottieDX:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_scottieDX_mode);
-                break;
-            case mode_wraaseSC2_180:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_wraaseSC2_180_mode);
-                break;
-            case mode_pd50:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_pd50_mode);
-                break;
-            case mode_pd90:
-                image.setImageResolution(320, freeRunReserve(256));
-                updateTitle(R.string.action_pd90_mode);
-                break;
-            case mode_pd120:
-                image.setImageResolution(640, freeRunReserve(496));
-                updateTitle(R.string.action_pd120_mode);
-                break;
-            case mode_pd160:
-                image.setImageResolution(512, freeRunReserve(400));
-                updateTitle(R.string.action_pd160_mode);
-                break;
-            case mode_pd180:
-                image.setImageResolution(640, freeRunReserve(496));
-                updateTitle(R.string.action_pd180_mode);
-                break;
-            case mode_pd240:
-                image.setImageResolution(640, freeRunReserve(496));
-                updateTitle(R.string.action_pd240_mode);
-                break;
-            case mode_pd290:
-                image.setImageResolution(800, freeRunReserve(616));
-                updateTitle(R.string.action_pd290_mode);
-                break;
+
             default:
                 break;
         }
