@@ -1,13 +1,13 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 32
+    compileSdk 33
     defaultConfig {
         applicationId "xdsopl.robot36"
         minSdkVersion 21
-        targetSdkVersion 32
-        versionCode 47
-        versionName "1.46"
+        targetSdkVersion 33
+        versionCode 49
+        versionName "1.48"
         renderscriptTargetApi 21
         renderscriptSupportModeEnabled true
     }
@@ -18,9 +18,12 @@ android {
         }
     }
     namespace 'xdsopl.robot36'
+    buildFeatures {
+        renderScript true
+    }
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation 'androidx.appcompat:appcompat:1.5.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
 }

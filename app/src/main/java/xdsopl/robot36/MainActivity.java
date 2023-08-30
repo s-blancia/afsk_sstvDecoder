@@ -543,17 +543,18 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
             ContentResolver resolver = getContentResolver();
             Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ParcelFileDescriptor descriptor;
                 FileOutputStream stream;
                 try {
-                    ParcelFileDescriptor descriptor = getContentResolver().openFileDescriptor(uri,"w");
+                    descriptor = getContentResolver().openFileDescriptor(uri,"w");
                     stream = new FileOutputStream(descriptor.getFileDescriptor());
-                    descriptor.close();
                 } catch (IOException ignore) {
                     return;
                 }
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
                 try {
                     stream.close();
+                    descriptor.close();
                 } catch (IOException ignore) {
                     return;
                 }
@@ -667,8 +668,13 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         List<String> permissions = new ArrayList<>();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             permissions.add(Manifest.permission.RECORD_AUDIO);
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
-            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
+                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
         if (permissions.isEmpty())
             return true;
         ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), permissionsID);
