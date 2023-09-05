@@ -1,4 +1,3 @@
-
 /*
 Copyright 2014 Ahmet Inan <xdsopl@googlemail.com>
 
@@ -23,10 +22,12 @@ import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -89,8 +90,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     private static final int DURATION_THRESHOLD = 50;
     private static final int MIN_BIT_COUNT = 8;
 
-    private boolean isAFSKDecodingActive = true; // Add this flag
-
     double specialFrequencySSTVactivator = 4500.0; // The special frequency for activating SSTV encoder
     double specialFrequencySSTVdeactivator = 4700.0; // The special frequency for Deactivating SSTV encoder
 
@@ -100,6 +99,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     double frequencyTolerance = 50.0; // Tolerance for frequency matching
 
     private boolean isAFSKDecoding = true; // Initialize as true to start decoding
+    private boolean isAFSKDecodingActive = true; // Add this flag
 
 
     private TextView decodedTextView;
@@ -112,6 +112,8 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     private AudioRecord audioRecord = null; // Declare a single AudioRecord instance
     // Declare a flag to keep track of ongoing audio recording
     private volatile boolean isAudioRecordingActive = false;
+    private static final String HUAWEI_RECORDING_STOP_ACTION = "com.huawei.action.STOP_RECORDING";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,6 +136,10 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
             requestPermissions();
         }
 
+        // Register the broadcast receiver to listen for recording stop events.
+        IntentFilter filter = new IntentFilter(HUAWEI_RECORDING_STOP_ACTION);
+        registerReceiver(recordingStopReceiver, filter);
+
         // Start decoding with specific mark and space frequencies
         double markFrequency = 1200.0; // Frequency of the "1" bit in Hz
         double spaceFrequency = 2200.0; // Frequency of the "0" bit in Hz
@@ -144,50 +150,96 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
 
         // Naka comment ni pra dili sya mag dungan which is syncrhonous pero di man pwde
-
-       // startSSTVDecoder();
+        // startSSTVDecoder();
 
     }
 
+    // Handle the event to stop recording
+    public void stopRecordingAfsk() {
+        // Send a broadcast to stop Huawei recording functionalities
+        // MUST EDIT TO ACCOMMODATE OTHER PHONE BRAND
+        Intent stopRecordingIntent = new Intent(HUAWEI_RECORDING_STOP_ACTION);
+        sendBroadcast(stopRecordingIntent);
 
-    // Method to stop audio recording
-    private void stopAudioRecording() {
 
-        Log.e("stopAudioRecording", "Detected An Audio Recoding working " );
-        if (audioRecord != null && audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+    }
+
+    // ... Other methods ...
+
+    // Your BroadcastReceiver to handle recording stop events
+    private BroadcastReceiver recordingStopReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            // Handle the recording stop action here.
+            // You can perform any necessary cleanup.
+
+            // For example, you can stop the AFSK decoding process here
+            // and perform any other cleanup as needed.
+
+            Log.d("RecordingStopReceiver", "Received recording stop action.");
+            showToast("Recording stopped.");
+//
+//            if (audioRecord != null) {
+//                try {
+//                    audioRecord.stop();
+//                    audioRecord.release();
+//                    Log.e("AudioRecording", "Audio recording resources is release " );
+//                } catch (IllegalStateException e) {
+//                    Log.e("AudioRecording", "Failed to stop audio recording: " + e.getMessage());
+//                }
+//            }
+
+
             try {
-                audioRecord.stop();
-                audioRecord.release();
-            } catch (IllegalStateException e) {
-                Log.e("SSTV_Decoder", "Failed to stop audio recording: " + e.getMessage());
+                startSSTVDecoder();
+            } catch (Exception e) {
+                // Handle any exceptions that may occur during audio recording initialization
+                Log.e("SSTV_Decoder", "Exception during audio recording initialization: " + e.getMessage());
             }
+
         }
-        isAudioRecordingActive = false; // Reset the flag to indicate no ongoing audio recording
+    };
+
+    // ... Other methods ...
+
+    // Method to display a toast message
+    private void showToast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
+
 
     // THIS METHOD IS SSTV ENCODER
+    protected void startSSTVDecoder() throws Exception {
 
-    protected void startSSTVDecoder() {
-        // Check if there is an ongoing audio recording
-        if (isAudioRecordingActive) {
-            // Terminate the ongoing audio recording
-            stopAudioRecording();
-        }
+//            try {
+//                int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+//                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+//                    // Request the missing permission here or handle the case where the permission is not granted
+//                    return;
+//                }
+//
+//                audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
 
+        // Check if the audioRecord instance is null or not recording
+        Log.d("SSTV decoder", "Successfully switched to SSTV decoder");
 
-        try {
-            int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                // Request the missing permission here or handle the case where the permission is not granted
+        int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
                 return;
             }
-
             audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
 
-            if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
-                audioRecord.startRecording();
-                Log.d("SSTV_Decoder", "Audio recording started successfully");
-                Log.d("SSTV_Decoder", "Detected Activation Sequence");
+//            if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
+//                audioRecord.startRecording();
+//                Log.d("AudioRecording", "Audio recording started successfully");
 
                 // Rest of your code for decoder initialization and processing
                 decoder = new Decoder(this,
@@ -199,17 +251,31 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                 activeDecoder.enable_analyzer(enableAnalyzer);
                 showNotification();
                 updateMenuButtons();
-            } else {
-                Log.e("SSTV_Decoder", "AudioRecord is not initialized.");
-            }
-        } catch (IllegalStateException e) {
-            Log.e("SSTV_Decoder", "Failed to start audio recording: " + e.getMessage());
-        } catch (Exception e) {
-            Log.e("SSTV_Decoder", "Exception during audio recording initialization: " + e.getMessage());
+//            } else {
+//                Log.e("SSTV_Decoder", "AudioRecord is not initialized.");
+//            }
         }
 
-    }
 
+
+
+    private boolean checkPermissions() {
+        String[] permissions = {
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE // Add any other required permissions
+        };
+
+        boolean allPermissionsGranted = true;
+
+        for (String permission : permissions) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                allPermissionsGranted = false;
+                ActivityCompat.requestPermissions(this, new String[]{permission}, PERMISSION_REQUEST_CODE);
+            }
+        }
+
+        return allPermissionsGranted;
+    }
 
 
 
@@ -220,22 +286,11 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
             @Override
             public void run() {
 
-                if (!isAFSKDecoding) {
-                    stopAFSKDecoding();
-                } else {
-                   //  Create an AudioRecord instance to capture audio
-                    int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-                    if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                        // Request the missing permission here or handle the case where the permission is not granted
-                        return;
-                    }
-                    AudioRecord audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
-
-
                     // Check if the audioRecord instance is null or not recording
                     if (audioRecord == null || audioRecord.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+
                         // Create an AudioRecord instance to capture audio
-                         bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+                        int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
                         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                             // Request the missing permission here or handle the case where the permission is not granted
                             return;
@@ -273,7 +328,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                                 Log.d("AFSK_Decoder", "Detected Special Frequency - Switching to SSTV");
 
                                 isAFSKDecodingActive = false; // Set the flag to stop AFSK decoding
-
+                                isAudioRecordingActive = false;
                                 // Stop and release the AFSK audio recording
                                 if (audioRecord != null) {
                                     try {
@@ -295,9 +350,10 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
                                 // Set decoder to null to release the AFSK decoder instance
                                 decoder = null;
-                                audioRecord = null;
-                                // Start the SSTV decoder
-                                startSSTVDecoder();
+
+
+                                // Stop Recording Functionalities
+                                stopRecordingAfsk();
 
                                 break; // Exit the loop since we've started SSTV decoding
                             }
@@ -351,24 +407,31 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                         }
                     }
                 }
-            }
+
         });
         thread.start();
 
     }
 
-    private void stopAFSKDecoding() {
-        isAFSKDecoding = false;
-
-        // Stop and release the AudioRecord instance if it is recording
-        if (audioRecord != null && audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
-            audioRecord.stop();
-            audioRecord.release();
-            audioRecord = null;
-        }
-
-        startSSTVDecoder();
-    }
+//
+//    private void stopAFSKDecoding() throws Exception {
+//        isAFSKDecoding = false;
+//
+//        // Stop and release the AudioRecord instance if it is recording
+////        if (audioRecord != null && audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+////            try {
+////                audioRecord.stop();
+////                audioRecord.release();
+////            } catch (IllegalStateException e) {
+////                Log.e("AFSK_Decoder", "Failed to stop audio recording: " + e.getMessage());
+////            } finally {
+////                audioRecord = null;
+////            }
+////        }
+//
+//        // Start the SSTV decoder
+//        startSSTVDecoder();
+//    }
 
 
     protected void stopDecoder() {
@@ -420,13 +483,17 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
             if (allPermissionsGranted) {
                 // All required permissions are granted, start decoding or perform other actions.
-                // Example: startSSTVDecoder();
+                try {
+                    startSSTVDecoder();
+                } catch (Exception e) {
+                 //   throw new RuntimeException(e);
+                    Toast.makeText(this, "Failed to start .", Toast.LENGTH_SHORT).show();
+                }
             } else {
                 Toast.makeText(this, "Permissions required to decode audio.", Toast.LENGTH_SHORT).show();
             }
         }
     }
-
 
 
 
@@ -679,13 +746,13 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
 
 
-
-    protected void toggleDecoder() {
-        if (decoder == null)
-            startSSTVDecoder();
-        else
-            stopDecoder();
-    }
+//
+//    protected void toggleDecoder() {
+//        if (decoder == null)
+//            startSSTVDecoder();
+//        else
+//            stopDecoder();
+//    }
 
     @Override
     protected void onDestroy () {
@@ -742,7 +809,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
         if (id == R.id.action_toggle_decoder) {
-            toggleDecoder();
+         //   toggleDecoder();
             return true;
         }
         if (id == R.id.action_save_image) {
