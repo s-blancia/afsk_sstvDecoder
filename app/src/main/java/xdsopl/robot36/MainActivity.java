@@ -44,6 +44,7 @@ import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -149,9 +150,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         startAFSKdecoder(markFrequency, spaceFrequency, specialFrequency);
 
 
-        // Naka comment ni pra dili sya mag dungan which is syncrhonous pero di man pwde
-        // startSSTVDecoder();
-
     }
 
     // Handle the event to stop recording
@@ -164,7 +162,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
     }
 
-    // ... Other methods ...
 
     // Your BroadcastReceiver to handle recording stop events
     private BroadcastReceiver recordingStopReceiver = new BroadcastReceiver() {
@@ -178,17 +175,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
             Log.d("RecordingStopReceiver", "Received recording stop action.");
             showToast("Recording stopped.");
-//
-//            if (audioRecord != null) {
-//                try {
-//                    audioRecord.stop();
-//                    audioRecord.release();
-//                    Log.e("AudioRecording", "Audio recording resources is release " );
-//                } catch (IllegalStateException e) {
-//                    Log.e("AudioRecording", "Failed to stop audio recording: " + e.getMessage());
-//                }
-//            }
-
 
             try {
                 startSSTVDecoder();
@@ -200,7 +186,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         }
     };
 
-    // ... Other methods ...
+
 
     // Method to display a toast message
     private void showToast(String message) {
@@ -210,15 +196,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
     // THIS METHOD IS SSTV ENCODER
     protected void startSSTVDecoder() throws Exception {
-
-//            try {
-//                int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-//                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-//                    // Request the missing permission here or handle the case where the permission is not granted
-//                    return;
-//                }
-//
-//                audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
 
         // Check if the audioRecord instance is null or not recording
         Log.d("SSTV decoder", "Successfully switched to SSTV decoder");
@@ -237,10 +214,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
             }
             audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
 
-//            if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
-//                audioRecord.startRecording();
-//                Log.d("AudioRecording", "Audio recording started successfully");
-
                 // Rest of your code for decoder initialization and processing
                 decoder = new Decoder(this,
                         findViewById(R.id.spectrum),
@@ -251,9 +224,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                 activeDecoder.enable_analyzer(enableAnalyzer);
                 showNotification();
                 updateMenuButtons();
-//            } else {
-//                Log.e("SSTV_Decoder", "AudioRecord is not initialized.");
-//            }
         }
 
 
@@ -329,6 +299,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
                                 isAFSKDecodingActive = false; // Set the flag to stop AFSK decoding
                                 isAudioRecordingActive = false;
+
                                 // Stop and release the AFSK audio recording
                                 if (audioRecord != null) {
                                     try {
@@ -340,8 +311,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                                     }
                                 }
 
-                                // Perform other resource cleanup related to AFSK decoding here
-
                                 // Release any buffers or objects related to AFSK decoding
                                 if (buffer != null) {
                                     buffer = null;
@@ -351,17 +320,17 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                                 // Set decoder to null to release the AFSK decoder instance
                                 decoder = null;
 
-
                                 // Stop Recording Functionalities
                                 stopRecordingAfsk();
 
-                                break; // Exit the loop since we've started SSTV decoding
+                                // Exit the loop since we've started SSTV decoding
+                                break;
                             }
 
                             else {
-
                                 // Perform decoding logic based on the received audio samples
                                 for (int i = 0; i < bytesRead; i++) {
+
                                     // Calculate the sample amplitude in the range [-1, 1]
                                     double amplitude = (double) buffer[i] / Short.MAX_VALUE;
 
@@ -375,6 +344,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
                                     // Detect bit transition (rising or falling edge)
                                     if (currentBit != previousBit) {
+
                                         if (currentBit) {
                                             // Rising edge (mark bit)
                                             binaryText.append("1");
@@ -383,7 +353,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                                             // Falling edge (space bit)
                                             binaryText.append("0");
                                             Log.d("AFSK_Decoder", "Detected Falling Edge (Space Bit).");
-
                                         }
                                     }
 
@@ -392,6 +361,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
                                 // Check if a full character has been received
                                 if (binaryText.length() >= MIN_BIT_COUNT && System.currentTimeMillis() - startTime > DURATION_THRESHOLD) {
+
                                     // Convert binary text to characters and append to the decoded text
                                     String decodedText = getDecodedText(binaryText.toString(), markFrequency, spaceFrequency, buffer, SAMPLE_RATE);
 
@@ -413,25 +383,129 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
     }
 
-//
-//    private void stopAFSKDecoding() throws Exception {
-//        isAFSKDecoding = false;
-//
-//        // Stop and release the AudioRecord instance if it is recording
-////        if (audioRecord != null && audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
-////            try {
-////                audioRecord.stop();
-////                audioRecord.release();
-////            } catch (IllegalStateException e) {
-////                Log.e("AFSK_Decoder", "Failed to stop audio recording: " + e.getMessage());
-////            } finally {
-////                audioRecord = null;
-////            }
-////        }
-//
-//        // Start the SSTV decoder
-//        startSSTVDecoder();
-//    }
+    // Character Binary Text Setup
+    private char getCharacterForBinaryText(String s, double markFrequency, double spaceFrequency, short[] samples, int sampleRate) {
+        double frequency = calculateInstantaneousFrequency(samples, sampleRate);
+        double tolerance = 50.0; // Adjust the tolerance as needed
+
+        if (Math.abs(frequency - markFrequency) <= tolerance) {
+            return '|';
+        }
+
+        // Numbers
+        else if (Math.abs(frequency - 2000.0) <= tolerance) {
+            return '0';
+        }else if (Math.abs(frequency - 2050.0) <= tolerance) {
+            return '1';
+        }else if (Math.abs(frequency - 2100.0) <= tolerance) {
+            return '2';
+        }else if (Math.abs(frequency - 2150.0) <= tolerance) {
+            return '3';
+        } else if (Math.abs(frequency - 2200.0) <= tolerance) {
+            return '4';
+        } else if (Math.abs(frequency - 2250.0) <= tolerance) {
+            return '5';
+        } else if (Math.abs(frequency - 2300.0) <= tolerance) {
+            return '6';
+        } else if (Math.abs(frequency - 2350.0) <= tolerance) {
+            return '7';
+        } else if (Math.abs(frequency - 2400.0) <= tolerance) {
+            return '8';
+        } else if (Math.abs(frequency - 2450.0) <= tolerance) {
+            return '9';
+        }
+        //Alphabet
+        if (Math.abs(frequency - 2800.0) <= tolerance) {
+            return  'a';
+        } else if (Math.abs(frequency - 2850.0) <= tolerance) {
+            return  'b';
+        } else if (Math.abs(frequency - 2900.0) <= tolerance) {
+            return  'c';
+        } else if (Math.abs(frequency - 2950.0) <= tolerance) {
+            return  'd';
+        } else if (Math.abs(frequency - 3000.0) <= tolerance) {
+            return  'e';
+        } else if (Math.abs(frequency - 3050.0) <= tolerance) {
+            return  'f';
+        } else if (Math.abs(frequency - 3100.0) <= tolerance) {
+            return  'g';
+        } else if (Math.abs(frequency - 3150.0) <= tolerance) {
+            return  'h';
+        } else if (Math.abs(frequency - 3200.0) <= tolerance) {
+            return  'i';
+        } else if (Math.abs(frequency - 3250.0) <= tolerance) {
+            return  'j';
+        } else if (Math.abs(frequency - 3300.0) <= tolerance) {
+            return  'k';
+        } else if (Math.abs(frequency - 3350.0) <= tolerance) {
+            return  'l';
+        } else if (Math.abs(frequency - 3400.0) <= tolerance) {
+            return  'm';
+        } else if (Math.abs(frequency - 3450.0) <= tolerance) {
+            return  'n';
+        } else if (Math.abs(frequency - 3500.0) <= tolerance) {
+            return  'o';
+        } else if (Math.abs(frequency - 3550.0) <= tolerance) {
+            return  'p';
+        } else if (Math.abs(frequency - 3600.0) <= tolerance) {
+            return  'q';
+        } else if (Math.abs(frequency - 3650.0) <= tolerance) {
+            return  'r';
+        } else if (Math.abs(frequency - 3700.0) <= tolerance) {
+            return  's';
+        } else if (Math.abs(frequency - 3750.0) <= tolerance) {
+            return  't';
+        } else if (Math.abs(frequency - 3800.0) <= tolerance) {
+            return  'u';
+        } else if (Math.abs(frequency - 3850.0) <= tolerance) {
+            return  'v';
+        } else if (Math.abs(frequency - 3900.0) <= tolerance) {
+            return  'w';
+        } else if (Math.abs(frequency - 3950.0) <= tolerance) {
+            return  'x';
+        } else if (Math.abs(frequency - 4000.0) <= tolerance) {
+            return  'y';
+        } else if (Math.abs(frequency - 4050.0) <= tolerance) {
+            return  'z';
+        }
+
+        //special Characters
+        else if (Math.abs(frequency - 4100.0) <= tolerance) {
+            return '#';
+        } else if (Math.abs(frequency - 4150.0) <= tolerance) {
+            return '-';
+        } else if (Math.abs(frequency - 4200.0) <= tolerance) {
+            return '+';
+        } else if (Math.abs(frequency - 4250.0) <= tolerance) {
+            return '(';
+        } else if (Math.abs(frequency - 4300.0) <= tolerance) {
+            return ')';
+        }  else if (Math.abs(frequency - 4350.0) <= tolerance) {
+            return '/';
+        } else if (Math.abs(frequency - 4400.0) <= tolerance) {
+            return '=';
+        } else if (Math.abs(frequency - 4450.0) <= tolerance) {
+            return '%';
+        } else if (Math.abs(frequency - 4600.0) <= tolerance) {
+            return ':';
+        }  else if (Math.abs(frequency - 4650.0) <= tolerance) {
+            return '!';
+        } else if (Math.abs(frequency - 4700.0) <= tolerance) {
+            return '?';
+        } else if (Math.abs(frequency - 4750.0) <= tolerance) {
+            return ',';
+        } else if (Math.abs(frequency - 4800.0) <= tolerance) {
+            return '.';
+        } else if (Math.abs(frequency - 4850.0) <= tolerance) {
+            return '*';
+        }  else if (Math.abs(frequency - 4900.0) <= tolerance) {
+            return '\'';
+        } else {
+            return ' '; // Return a space for unrecognized frequencies
+        }
+
+
+    }
 
 
     protected void stopDecoder() {
@@ -444,6 +518,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     }
 
 
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     private void requestPermissions() {
         String[] permissions = {
                 Manifest.permission.RECORD_AUDIO,
@@ -785,26 +860,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         return true;
     }
 
-//    @Override
-//    public void onConfigurationChanged(@NonNull Configuration config) {
-//        super.onConfigurationChanged(config);
-//        changeLayoutOrientation(config);
-//    }
-
-//    private void changeLayoutOrientation(Configuration config) {
-//        boolean horizontal = config.orientation == Configuration.ORIENTATION_LANDSCAPE;
-//        View analysis = findViewById(R.id.analysis);
-//        analysis.setVisibility(enableAnalyzer ? View.VISIBLE : View.GONE);
-//        analysis.setLayoutParams(
-//                new LinearLayout.LayoutParams(
-//                        LinearLayout.LayoutParams.MATCH_PARENT,
-//                        LinearLayout.LayoutParams.MATCH_PARENT, horizontal ? 1.0f : 10.0f));
-//        int content_orientation = horizontal ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL;
-//        ((LinearLayout)findViewById(R.id.content)).setOrientation(content_orientation);
-//        int analysis_orientation = horizontal ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL;
-//        ((LinearLayout)findViewById(R.id.analysis)).setOrientation(analysis_orientation);
-//    }
-
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
@@ -860,11 +915,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
             decoder.auto_mode();
             return true;
         }
-//        if (id == R.id.action_toggle_analyzer) {
-//            decoder.enable_analyzer(enableAnalyzer ^= true);
-//            changeLayoutOrientation(getResources().getConfiguration());
-//            return true;
-//        }
         if (id == R.id.action_slow_update_rate) {
             decoder.setUpdateRate(0);
             return true;
@@ -982,112 +1032,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
     }
 
-    private char getCharacterForBinaryText(String s, double markFrequency, double spaceFrequency, short[] samples, int sampleRate) {
-        double frequency = calculateInstantaneousFrequency(samples, sampleRate);
-        double tolerance = 50.0; // Adjust the tolerance as needed
-
-        if (Math.abs(frequency - markFrequency) <= tolerance) {
-            return '|';
-        }
-        // Numbers
-        else if (Math.abs(frequency - 2000.0) <= tolerance) {
-            return '0';
-        }else if (Math.abs(frequency - 2050.0) <= tolerance) {
-            return '1';
-        }else if (Math.abs(frequency - 2100.0) <= tolerance) {
-            return '2';
-        }else if (Math.abs(frequency - 2150.0) <= tolerance) {
-            return '3';
-        } else if (Math.abs(frequency - 2200.0) <= tolerance) {
-            return '4';
-        } else if (Math.abs(frequency - 2250.0) <= tolerance) {
-            return '5';
-        } else if (Math.abs(frequency - 2300.0) <= tolerance) {
-            return '6';
-        } else if (Math.abs(frequency - 2350.0) <= tolerance) {
-            return '7';
-        } else if (Math.abs(frequency - 2400.0) <= tolerance) {
-            return '8';
-        } else if (Math.abs(frequency - 2450.0) <= tolerance) {
-            return '9';
-        }
-        //special Characters
-        else if (Math.abs(frequency - 4300.0) <= tolerance) {
-            return '/';
-        }else if (Math.abs(frequency - 4350.0) <= tolerance) {
-            return '=';
-        }else if (Math.abs(frequency - 4400.0) <= tolerance) {
-            return ':';
-        }else if (Math.abs(frequency - 4450.0) <= tolerance) {
-            return '?';
-        }else if (Math.abs(frequency - 4500.0) <= tolerance) {
-            return ',';
-        }
-        else if (Math.abs(frequency - 4550.0) <= tolerance) {
-            return '.';
-        }
-        else if (Math.abs(frequency - 4700.0) <= tolerance) {
-            return ' ';
-        }
-        //Alphabet
-        else if (Math.abs(frequency - 2850.0) <= tolerance) {
-            return 'a';
-        } else if (Math.abs(frequency - 2900.0) <= tolerance) {
-            return 'b';
-        } else if (Math.abs(frequency - 2950.0) <= tolerance) {
-            return 'c';
-        } else if (Math.abs(frequency - 3000.0) <= tolerance) {
-            return 'd';
-        } else if (Math.abs(frequency - 3050.0) <= tolerance) {
-            return 'e';
-        } else if (Math.abs(frequency - 3100.0) <= tolerance) {
-            return 'f';
-        } else if (Math.abs(frequency - 3150.0) <= tolerance) {
-            return 'g';
-        } else if (Math.abs(frequency - 3200.0) <= tolerance) {
-            return 'h';
-        } else if (Math.abs(frequency - 3250.0) <= tolerance) {
-            return 'i';
-        } else if (Math.abs(frequency - 3300.0) <= tolerance) {
-            return 'j';
-        } else if (Math.abs(frequency - 3350.0) <= tolerance) {
-            return 'k';
-        } else if (Math.abs(frequency - 3400.0) <= tolerance) {
-            return 'l';
-        } else if (Math.abs(frequency - 3450.0) <= tolerance) {
-            return 'm';
-        } else if (Math.abs(frequency - 3500.0) <= tolerance) {
-            return 'n';
-        } else if (Math.abs(frequency - 3550.0) <= tolerance) {
-            return 'o';
-        } else if (Math.abs(frequency - 3600.0) <= tolerance) {
-            return 'p';
-        } else if (Math.abs(frequency - 3650.0) <= tolerance) {
-            return 'q';
-        } else if (Math.abs(frequency - 3700.0) <= tolerance) {
-            return 'r';
-        } else if (Math.abs(frequency - 3750.0) <= tolerance) {
-            return 's';
-        } else if (Math.abs(frequency - 3800.0) <= tolerance) {
-            return 't';
-        } else if (Math.abs(frequency - 3850.0) <= tolerance) {
-            return 'u';
-        } else if (Math.abs(frequency - 3900.0) <= tolerance) {
-            return 'v';
-        } else if (Math.abs(frequency - 3950.0) <= tolerance) {
-            return 'w';
-        } else if (Math.abs(frequency - 4000.0) <= tolerance) {
-            return 'x';
-        } else if (Math.abs(frequency - 4050.0) <= tolerance) {
-            return 'y';
-        } else if (Math.abs(frequency - 4100.0) <= tolerance) {
-            return 'z';
-        } else if (Math.abs(frequency - spaceFrequency) <= tolerance) {
-            return ' ';
-        } else {
-            return ' '; // Return a space for unrecognized frequenciesdawd dawdawdawd
-        }
-    }
 
 
 
