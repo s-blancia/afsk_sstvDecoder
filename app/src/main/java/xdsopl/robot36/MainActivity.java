@@ -99,8 +99,7 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
     double frequencyTolerance = 50.0; // Tolerance for frequency matching
 
-    private boolean isAFSKDecoding = true; // Initialize as true to start decoding
-    private boolean isAFSKDecodingActive = true; // Add this flag
+
 
 
     private TextView decodedTextView;
@@ -112,8 +111,21 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     private Decoder activeDecoder = null;
     private AudioRecord audioRecord = null; // Declare a single AudioRecord instance
     // Declare a flag to keep track of ongoing audio recording
-    private volatile boolean isAudioRecordingActive = false;
+
     private static final String HUAWEI_RECORDING_STOP_ACTION = "com.huawei.action.STOP_RECORDING";
+
+
+    private boolean isImageSuccesfullySave = false; // FLAG for termination of SSTV decoding process
+    private boolean  isDecoderTerminated = false;
+    private boolean isTextDecoded = false;
+    private boolean isDecoderSwitched = false;
+
+    private boolean isAFSKDecoding = true; // Initialize as true to start decoding
+    private boolean isAFSKDecodingActive = true;
+    private boolean isSSTVDecodingActive = false;
+
+    private volatile boolean isAudioRecordingActive = false;
+
 
 
     @Override
@@ -134,12 +146,15 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requestPermissions();
+            }
         }
 
         // Register the broadcast receiver to listen for recording stop events.
         IntentFilter filter = new IntentFilter(HUAWEI_RECORDING_STOP_ACTION);
         registerReceiver(recordingStopReceiver, filter);
+
 
         // Start decoding with specific mark and space frequencies
         double markFrequency = 1200.0; // Frequency of the "1" bit in Hz
@@ -152,15 +167,26 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
 
     }
 
-    // Handle the event to stop recording
+    // Handle the event to stop recording for AFSK
     public void stopRecordingAfsk() {
         // Send a broadcast to stop Huawei recording functionalities
         // MUST EDIT TO ACCOMMODATE OTHER PHONE BRAND
         Intent stopRecordingIntent = new Intent(HUAWEI_RECORDING_STOP_ACTION);
         sendBroadcast(stopRecordingIntent);
-
+        isDecoderSwitched = false;
 
     }
+
+    // Handle the event to stop recording for SSTV
+    public void stopRecordingSSTV() {
+        // Send a broadcast to stop Huawei recording functionalities
+        // MUST EDIT TO ACCOMMODATE OTHER PHONE BRAND
+        Intent stopRecordingIntent = new Intent(HUAWEI_RECORDING_STOP_ACTION);
+        sendBroadcast(stopRecordingIntent);
+
+    }
+
+
 
 
     // Your BroadcastReceiver to handle recording stop events
@@ -176,12 +202,23 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
             Log.d("RecordingStopReceiver", "Received recording stop action.");
             showToast("Recording stopped.");
 
-            try {
+        try {
+            if(isSSTVDecodingActive) {
                 startSSTVDecoder();
-            } catch (Exception e) {
-                // Handle any exceptions that may occur during audio recording initialization
-                Log.e("SSTV_Decoder", "Exception during audio recording initialization: " + e.getMessage());
             }
+
+            else{
+                checkPermissions();
+                // Start decoding with specific mark and space frequencies
+                double markFrequency = 1200.0; // Frequency of the "1" bit in Hz
+                double spaceFrequency = 2200.0; // Frequency of the "0" bit in Hz
+                double specialFrequency = 4500.0;
+                startAFSKdecoder(markFrequency, spaceFrequency, specialFrequency);
+            }
+        } catch (Exception e) {
+            // Handle any exceptions that may occur during audio recording initialization
+            Log.e("ALERT", "Exception during audio recording initialization: " + e.getMessage());
+        }
 
         }
     };
@@ -224,7 +261,122 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                 activeDecoder.enable_analyzer(enableAnalyzer);
                 showNotification();
                 updateMenuButtons();
+
+        isAFSKDecodingActive = true;
+        isSSTVDecodingActive = false;
+
+        stopRecordingSSTV();
         }
+
+    protected void stopDecoder() {
+        if (decoder == null)
+            return;
+        decoder.destroy();
+        decoder = null;
+        manager.cancel(notifyID);
+        updateMenuButtons();
+
+        showToast("Decoder Terminated" );
+
+        Log.d("ALERT", "Switching to AFSK decoder");
+        isSSTVDecodingActive = false;
+        isDecoderSwitched = true;
+
+        if (audioRecord != null) {
+            try {
+                audioRecord.stop();
+                audioRecord.release();
+                stopRecordingSSTV();
+
+            } catch (IllegalStateException e) {
+                Log.e("AFSK_Decoder", "Failed to stop audio recording: " + e.getMessage());
+            }
+        }
+
+
+
+
+    }
+
+
+    void storeBitmap(Bitmap image) {bitmap = image;
+
+        runOnUiThread(() -> {
+
+            Date date = new Date();
+            @SuppressLint("SimpleDateFormat") String name = new SimpleDateFormat("yyyyMMdd_HHmmss").format(date);
+            @SuppressLint("SimpleDateFormat") String title = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date);
+            ContentValues values = new ContentValues();
+            File dir;
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+                if (!dir.exists())
+                    //noinspection ResultOfMethodCallIgnored
+                    dir.mkdirs();
+                File file;
+                try {
+                    file = File.createTempFile(name + "_", ".png", dir);
+                    name = file.getName();
+                } catch (IOException ignore) {
+                    return;
+                }
+                FileOutputStream stream;
+                try {
+                    stream = new FileOutputStream(file);
+                } catch (IOException ignore) {
+                    return;
+                }
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+                try {
+                    stream.close();
+                } catch (IOException ignore) {
+                    return;
+                }
+                values.put(MediaStore.Images.ImageColumns.DATA, file.toString());
+            } else {
+                name += ".png";
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, name);
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/");
+                values.put(MediaStore.Images.Media.IS_PENDING, 1);
+            }
+            values.put(MediaStore.Images.ImageColumns.TITLE, title);
+            values.put(MediaStore.Images.ImageColumns.MIME_TYPE, "image/png");
+            ContentResolver resolver = getContentResolver();
+            Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ParcelFileDescriptor descriptor;
+                FileOutputStream stream;
+                try {
+                    descriptor = getContentResolver().openFileDescriptor(uri,"w");
+                    stream = new FileOutputStream(descriptor.getFileDescriptor());
+                } catch (IOException ignore) {
+                    return;
+                }
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+                try {
+                    stream.close();
+                    descriptor.close();
+                } catch (IOException ignore) {
+                    return;
+                }
+                values.clear();
+                values.put(MediaStore.Images.Media.IS_PENDING, 0);
+                resolver.update(uri, values, null, null);
+            }
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.putExtra(Intent.EXTRA_STREAM, uri);
+            intent.setType("image/png");
+            share.setShareIntent(intent);
+            Toast toast = Toast.makeText(getApplicationContext(), name, Toast.LENGTH_SHORT);
+            toast.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL, 0, 0);
+            toast.show();
+
+            stopDecoder();
+
+        });
+    }
+
 
 
 
@@ -255,28 +407,44 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
+                Log.d("ALERT", "Successfully Switch To AFSK ");
 
-                    // Check if the audioRecord instance is null or not recording
-                    if (audioRecord == null || audioRecord.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+                if(isDecoderSwitched){
+                    clearDecodedText();
+                    Log.d("ALERT", "Previously Decoded Message is Cleared");
+                    isAFSKDecodingActive = true;
+                    isDecoderSwitched = false;
 
-                        // Create an AudioRecord instance to capture audio
-                        int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-                        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                            // Request the missing permission here or handle the case where the permission is not granted
-                            return;
-                        }
-                        audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+                }
 
-                        // Start audio capture
-                        try {
-                            audioRecord.startRecording();
-                        } catch (IllegalStateException e) {
-                            // Handle startRecording() exception
-                            Log.e("Decoding", "Failed to start audio recording: " + e.getMessage());
-                            return;
-                        }
+                int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
 
-                        // Decoding variables
+                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return;
+                }
+                audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+                Log.d("AFSK", "Recording In progress");
+
+                // Start audio capture
+                try {
+                    audioRecord.startRecording();
+                    Log.d("AFSK_Decoder", "Started audio recording successfully.");
+                } catch (IllegalStateException e) {
+                    // Handle startRecording() exception
+                    Log.e("AFSK_Decoder", "Failed to start audio recording: " + e.getMessage());
+                    e.printStackTrace();
+                    // Add any additional error handling code as needed
+                }
+
+
+                // Decoding variables
                         StringBuilder binaryText = new StringBuilder();
                         boolean previousBit = false;
                         long startTime = System.currentTimeMillis();
@@ -297,8 +465,10 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                                 // Detected the special frequency, trigger SSTV encoder or desired action
                                 Log.d("AFSK_Decoder", "Detected Special Frequency - Switching to SSTV");
 
-                                isAFSKDecodingActive = false; // Set the flag to stop AFSK decoding
-                                isAudioRecordingActive = false;
+
+                                isAFSKDecodingActive = false;
+                                isSSTVDecodingActive = true;
+
 
                                 // Stop and release the AFSK audio recording
                                 if (audioRecord != null) {
@@ -372,16 +542,167 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
                                     // Reset variables for the next character
                                     binaryText.setLength(0);
                                     startTime = System.currentTimeMillis();
+
+                                    if(decodedText.isEmpty()){
+                                        isTextDecoded = false;
+                                    }
+                                    else{
+                                        isTextDecoded = true;
+
+                                    }
+
                                 }
                             }
                         }
-                    }
+
                 }
 
         });
         thread.start();
 
     }
+
+
+
+
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
+    private void requestPermissions() {
+        String[] permissions = {
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE, // Add any other required permissions
+                Manifest.permission.POST_NOTIFICATIONS // Add any other required permissions
+        };
+
+        List<String> missingPermissions = new ArrayList<>();
+
+        for (String permission : permissions) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                missingPermissions.add(permission);
+            }
+        }
+
+        if (!missingPermissions.isEmpty()) {
+            ActivityCompat.requestPermissions(this, missingPermissions.toArray(new String[0]), PERMISSION_REQUEST_CODE);
+        } else {
+            // All required permissions are already granted, start decoding or perform other actions.
+            // Example: startSSTVDecoder();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            boolean allPermissionsGranted = true;
+
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allPermissionsGranted = false;
+                    break; // No need to check further if any permission is not granted
+                }
+            }
+
+            if (allPermissionsGranted) {
+                // All required permissions are granted, start decoding or perform other actions.
+                try {
+                    startSSTVDecoder();
+                } catch (Exception e) {
+                 //   throw new RuntimeException(e);
+                    Toast.makeText(this, "Failed to start .", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Permissions required to decode audio.", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+
+
+    private void appendToDecodedText(String decodedText) {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                String previousDecodedText = decodedTextView.getText().toString();
+                StringBuilder decodedTextBuilder = new StringBuilder(previousDecodedText);
+
+                // Check if the decoded text is a continuation of the previous decoded text
+                if (!previousDecodedText.endsWith(decodedText)) {
+                    decodedTextBuilder.append(decodedText);
+                }
+
+                decodedTextView.setText(decodedTextBuilder.toString());
+            }
+        });
+    }
+    private void clearDecodedText() {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                decodedTextView.setText(""); // Clear the decoded text
+            }
+        });
+    }
+
+    private String getDecodedText(String binaryText, double markFrequency, double spaceFrequency, short[] samples, int sampleRate) {
+        StringBuilder decodedText = new StringBuilder();
+        int textLength = binaryText.length();
+        int startIndex = 0;
+
+        // Process the binary text in chunks of MIN_BIT_COUNT
+        while (startIndex + MIN_BIT_COUNT <= textLength) {
+            String chunk = binaryText.substring(startIndex, startIndex + MIN_BIT_COUNT);
+            char decodedCharacter = getCharacterForBinaryText(chunk, markFrequency, spaceFrequency, samples, sampleRate);
+
+            // Check if the decoded character is the same as the last character in the decoded text
+            if (decodedText.length() >= 1 && decodedCharacter == decodedText.charAt(decodedText.length() - 1)) {
+                // Skip adding the repeated character
+                startIndex += MIN_BIT_COUNT;
+                continue;
+            }
+
+            decodedText.append(decodedCharacter);
+            startIndex += MIN_BIT_COUNT;
+        }
+
+        return decodedText.toString();
+    }
+
+    private double calculateInstantaneousFrequency(short[] samples, int sampleRate) {
+        int bufferSize = samples.length;
+        double[] magnitude = new double[bufferSize / 2];
+        double maxMagnitude = Double.MIN_VALUE;
+        int maxIndex = -1;
+
+        // Apply window function to the samples (e.g., Hamming window)
+
+        // Perform the FFT
+        DoubleFFT_1D transformer = new DoubleFFT_1D(bufferSize);
+        double[] transformedSamples = new double[bufferSize];
+        for (int i = 0; i < bufferSize; i++) {
+            transformedSamples[i] = samples[i];
+        }
+        transformer.realForward(transformedSamples);
+
+        // Calculate the magnitudes of the FFT bins
+        for (int i = 0; i < bufferSize / 2; i++) {
+            double real = transformedSamples[2 * i];
+            double imaginary = transformedSamples[2 * i + 1];
+            magnitude[i] = Math.sqrt(real * real + imaginary * imaginary);
+
+            // Track the bin with the maximum magnitude
+            if (magnitude[i] > maxMagnitude) {
+                maxMagnitude = magnitude[i];
+                maxIndex = i;
+            }
+        }
+
+        // Calculate the frequency corresponding to the bin with the maximum magnitude
+        double frequency = maxIndex * (double) sampleRate / bufferSize;
+
+        return frequency;
+    }
+
 
     // Character Binary Text Setup
     private char getCharacterForBinaryText(String s, double markFrequency, double spaceFrequency, short[] samples, int sampleRate) {
@@ -508,145 +829,20 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
     }
 
 
-    protected void stopDecoder() {
-        if (decoder == null)
-            return;
-        decoder.destroy();
-        decoder = null;
-        manager.cancel(notifyID);
-        updateMenuButtons();
-    }
-
-
-    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
-    private void requestPermissions() {
-        String[] permissions = {
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE, // Add any other required permissions
-                Manifest.permission.POST_NOTIFICATIONS // Add any other required permissions
-        };
-
-        List<String> missingPermissions = new ArrayList<>();
-
-        for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                missingPermissions.add(permission);
-            }
-        }
-
-        if (!missingPermissions.isEmpty()) {
-            ActivityCompat.requestPermissions(this, missingPermissions.toArray(new String[0]), PERMISSION_REQUEST_CODE);
-        } else {
-            // All required permissions are already granted, start decoding or perform other actions.
-            // Example: startSSTVDecoder();
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            boolean allPermissionsGranted = true;
-
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    allPermissionsGranted = false;
-                    break; // No need to check further if any permission is not granted
-                }
-            }
-
-            if (allPermissionsGranted) {
-                // All required permissions are granted, start decoding or perform other actions.
-                try {
-                    startSSTVDecoder();
-                } catch (Exception e) {
-                 //   throw new RuntimeException(e);
-                    Toast.makeText(this, "Failed to start .", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this, "Permissions required to decode audio.", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
 
 
 
-    private void appendToDecodedText(String decodedText) {
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                String previousDecodedText = decodedTextView.getText().toString();
-                StringBuilder decodedTextBuilder = new StringBuilder(previousDecodedText);
 
-                // Check if the decoded text is a continuation of the previous decoded text
-                if (!previousDecodedText.endsWith(decodedText)) {
-                    decodedTextBuilder.append(decodedText);
-                }
 
-                decodedTextView.setText(decodedTextBuilder.toString());
-            }
-        });
-    }
 
-    private String getDecodedText(String binaryText, double markFrequency, double spaceFrequency, short[] samples, int sampleRate) {
-        StringBuilder decodedText = new StringBuilder();
-        int textLength = binaryText.length();
-        int startIndex = 0;
 
-        // Process the binary text in chunks of MIN_BIT_COUNT
-        while (startIndex + MIN_BIT_COUNT <= textLength) {
-            String chunk = binaryText.substring(startIndex, startIndex + MIN_BIT_COUNT);
-            char decodedCharacter = getCharacterForBinaryText(chunk, markFrequency, spaceFrequency, samples, sampleRate);
 
-            // Check if the decoded character is the same as the last character in the decoded text
-            if (decodedText.length() >= 1 && decodedCharacter == decodedText.charAt(decodedText.length() - 1)) {
-                // Skip adding the repeated character
-                startIndex += MIN_BIT_COUNT;
-                continue;
-            }
 
-            decodedText.append(decodedCharacter);
-            startIndex += MIN_BIT_COUNT;
-        }
 
-        return decodedText.toString();
-    }
 
-    private double calculateInstantaneousFrequency(short[] samples, int sampleRate) {
-        int bufferSize = samples.length;
-        double[] magnitude = new double[bufferSize / 2];
-        double maxMagnitude = Double.MIN_VALUE;
-        int maxIndex = -1;
 
-        // Apply window function to the samples (e.g., Hamming window)
 
-        // Perform the FFT
-        DoubleFFT_1D transformer = new DoubleFFT_1D(bufferSize);
-        double[] transformedSamples = new double[bufferSize];
-        for (int i = 0; i < bufferSize; i++) {
-            transformedSamples[i] = samples[i];
-        }
-        transformer.realForward(transformedSamples);
 
-        // Calculate the magnitudes of the FFT bins
-        for (int i = 0; i < bufferSize / 2; i++) {
-            double real = transformedSamples[2 * i];
-            double imaginary = transformedSamples[2 * i + 1];
-            magnitude[i] = Math.sqrt(real * real + imaginary * imaginary);
-
-            // Track the bin with the maximum magnitude
-            if (magnitude[i] > maxMagnitude) {
-                maxMagnitude = magnitude[i];
-                maxIndex = i;
-            }
-        }
-
-        // Calculate the frequency corresponding to the bin with the maximum magnitude
-        double frequency = maxIndex * (double) sampleRate / bufferSize;
-
-        return frequency;
-    }
 
 
 
@@ -714,79 +910,6 @@ public class MainActivity extends AppCompatActivity implements GestureDetector.O
         if (getTitle() != newTitle) {
             runOnUiThread(() -> setTitle(newTitle));
         }
-    }
-
-    void storeBitmap(Bitmap image) {
-        bitmap = image;
-        runOnUiThread(() -> {
-            Date date = new Date();
-            @SuppressLint("SimpleDateFormat") String name = new SimpleDateFormat("yyyyMMdd_HHmmss").format(date);
-            @SuppressLint("SimpleDateFormat") String title = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date);
-            ContentValues values = new ContentValues();
-            File dir;
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-                if (!dir.exists())
-                    //noinspection ResultOfMethodCallIgnored
-                    dir.mkdirs();
-                File file;
-                try {
-                    file = File.createTempFile(name + "_", ".png", dir);
-                    name = file.getName();
-                } catch (IOException ignore) {
-                    return;
-                }
-                FileOutputStream stream;
-                try {
-                    stream = new FileOutputStream(file);
-                } catch (IOException ignore) {
-                    return;
-                }
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-                try {
-                    stream.close();
-                } catch (IOException ignore) {
-                    return;
-                }
-                values.put(MediaStore.Images.ImageColumns.DATA, file.toString());
-            } else {
-                name += ".png";
-                values.put(MediaStore.Images.Media.DISPLAY_NAME, name);
-                values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/");
-                values.put(MediaStore.Images.Media.IS_PENDING, 1);
-            }
-            values.put(MediaStore.Images.ImageColumns.TITLE, title);
-            values.put(MediaStore.Images.ImageColumns.MIME_TYPE, "image/png");
-            ContentResolver resolver = getContentResolver();
-            Uri uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ParcelFileDescriptor descriptor;
-                FileOutputStream stream;
-                try {
-                    descriptor = getContentResolver().openFileDescriptor(uri,"w");
-                    stream = new FileOutputStream(descriptor.getFileDescriptor());
-                } catch (IOException ignore) {
-                    return;
-                }
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-                try {
-                    stream.close();
-                    descriptor.close();
-                } catch (IOException ignore) {
-                    return;
-                }
-                values.clear();
-                values.put(MediaStore.Images.Media.IS_PENDING, 0);
-                resolver.update(uri, values, null, null);
-            }
-            Intent intent = new Intent(Intent.ACTION_SEND);
-            intent.putExtra(Intent.EXTRA_STREAM, uri);
-            intent.setType("image/png");
-            share.setShareIntent(intent);
-            Toast toast = Toast.makeText(getApplicationContext(), name, Toast.LENGTH_SHORT);
-            toast.setGravity(Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL, 0, 0);
-            toast.show();
-        });
     }
 
 

@@ -69,6 +69,7 @@ public class Decoder {
     private final int mode_robot72 = 2;
 
 
+
     private final Thread thread = new Thread() {
         @Override
         public void run() {
